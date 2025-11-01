@@ -28,34 +28,40 @@ struct ContentView: View {
         .environmentObject(AppState())
 }
 
-private enum DashboardTab: Hashable {
-    case farmer
-    case owner
-    case profile
-}
-
 private struct MainDashboardView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var selection: DashboardTab = .farmer
+
+    var body: some View {
+        switch appState.selectedRole {
+        case .farmer:
+            FarmerTabScaffold()
+        case .owner:
+            OwnerTabScaffold()
+        case .none:
+            ProfileView()
+        }
+    }
+}
+
+private struct FarmerTabScaffold: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var selection: FarmerTab = .drones
     @State private var hasLoaded = false
 
     var body: some View {
         TabView(selection: $selection) {
-            if appState.availableRoles.contains(.farmer) {
-                FarmerDashboardView()
-                    .tabItem {
-                        Label("Farmer", systemImage: "leaf")
-                    }
-                    .tag(DashboardTab.farmer)
-            }
+            FarmerDashboardView()
+                .tabItem {
+                    Label("Drones", systemImage: "leaf")
+                }
+                .tag(FarmerTab.drones)
 
-            if appState.availableRoles.contains(.owner) {
-                OwnerDashboardView()
-                    .tabItem {
-                        Label("Owner", systemImage: "airplane")
-                    }
-                    .tag(DashboardTab.owner)
-            }
+            BookingsView()
+                .environmentObject(appState)
+                .tabItem {
+                    Label("Bookings", systemImage: "calendar")
+                }
+                .tag(FarmerTab.bookings)
 
             NavigationStack {
                 ProfileView()
@@ -63,27 +69,21 @@ private struct MainDashboardView: View {
             .tabItem {
                 Label("Profile", systemImage: "person")
             }
-            .tag(DashboardTab.profile)
+            .tag(FarmerTab.profile)
         }
         .onAppear {
             if !hasLoaded {
                 hasLoaded = true
                 Task { await appState.refreshData() }
             }
-            syncSelectionWithRole()
         }
         .onChange(of: selection) { _, tab in
             switch tab {
-            case .farmer:
+            case .drones, .bookings:
                 appState.switchRole(.farmer)
-            case .owner:
-                appState.switchRole(.owner)
             case .profile:
                 break
             }
-        }
-        .onChange(of: appState.selectedRole) { _ in
-            syncSelectionWithRole()
         }
         .overlay(alignment: .bottom) {
             if appState.isLoading {
@@ -94,19 +94,71 @@ private struct MainDashboardView: View {
             }
         }
     }
+}
 
-    private func syncSelectionWithRole() {
-        if let role = appState.selectedRole {
-            switch role {
-            case .farmer where appState.availableRoles.contains(.farmer):
-                selection = .farmer
-            case .owner where appState.availableRoles.contains(.owner):
-                selection = .owner
-            default:
-                selection = .profile
+private enum FarmerTab: Hashable {
+    case drones
+    case bookings
+    case profile
+}
+
+private struct OwnerTabScaffold: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var selection: OwnerTab = .drones
+    @State private var hasLoaded = false
+
+    var body: some View {
+        TabView(selection: $selection) {
+            OwnerDroneListView()
+                .environmentObject(appState)
+                .tabItem {
+                    Label("My Drones", systemImage: "airplane")
+                }
+                .tag(OwnerTab.drones)
+
+            BookingsView()
+                .environmentObject(appState)
+                .tabItem {
+                    Label("Bookings", systemImage: "calendar")
+                }
+                .tag(OwnerTab.bookings)
+
+            NavigationStack {
+                ProfileView()
             }
-        } else if selection != .profile {
-            selection = .profile
+            .tabItem {
+                Label("Profile", systemImage: "person.crop.circle")
+            }
+            .tag(OwnerTab.profile)
+        }
+        .onAppear {
+            if !hasLoaded {
+                hasLoaded = true
+                Task { await appState.refreshData() }
+            }
+            appState.switchRole(.owner)
+        }
+        .onChange(of: selection) { _, tab in
+            switch tab {
+            case .drones, .bookings:
+                appState.switchRole(.owner)
+            case .profile:
+                break
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if appState.isLoading {
+                LoadingView()
+                    .background(.thinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
+                    .padding()
+            }
         }
     }
+}
+
+private enum OwnerTab: Hashable {
+    case drones
+    case bookings
+    case profile
 }

@@ -8,6 +8,8 @@ final class TokenManager {
     private let roleKey = "edrone.role"
     private let rolesKey = "edrone.roles"
     private let profileNameKey = "edrone.profile_name"
+    private let onboardingKey = "edrone.onboarding_complete"
+    private let onboardingPreferredRoleKey = "edrone.onboarding_preferred_role"
     private let defaults: UserDefaults
 
     private init(defaults: UserDefaults = .standard) {
@@ -75,11 +77,32 @@ final class TokenManager {
         }
     }
 
+    var hasSeenOnboarding: Bool {
+        get { defaults.bool(forKey: onboardingKey) }
+        set { defaults.set(newValue, forKey: onboardingKey) }
+    }
+
+    var onboardingPreferredRole: UserRole? {
+        get {
+            guard let raw = defaults.string(forKey: onboardingPreferredRoleKey) else { return nil }
+            return UserRole(rawValue: raw)
+        }
+        set {
+            if let role = newValue {
+                defaults.set(role.rawValue, forKey: onboardingPreferredRoleKey)
+            } else {
+                defaults.removeObject(forKey: onboardingPreferredRoleKey)
+            }
+        }
+    }
+
     func clear() {
         token = nil
         mobile = nil
         selectedRole = nil
         availableRoles = []
         profileName = nil
+        defaults.removeObject(forKey: onboardingKey)
+        defaults.removeObject(forKey: onboardingPreferredRoleKey)
     }
 }

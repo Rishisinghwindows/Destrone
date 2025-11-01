@@ -30,6 +30,7 @@ final class AppState: ObservableObject {
     @Published var errorMessage: String?
     @Published var droneFilter = DroneFilter()
     @Published var availableRoles: [UserRole] = []
+    @Published var ownerDrones: [Drone] = []
 
     let authService: AuthService
     let droneService: DroneService
@@ -85,7 +86,7 @@ final class AppState: ObservableObject {
 
         if let stored = TokenManager.shared.selectedRole, normalizedRoles.contains(stored) {
             switchRole(stored)
-        } else if let activeRole, normalizedRoles.count == 1, normalizedRoles.contains(activeRole) {
+        } else if let activeRole, normalizedRoles.contains(activeRole) {
             switchRole(activeRole)
         } else if normalizedRoles.count == 1, let first = normalizedRoles.first {
             switchRole(first)
@@ -106,6 +107,7 @@ final class AppState: ObservableObject {
         updateToken(nil, mobile: nil, activeRole: nil, roles: [])
         switchRole(nil)
         drones = []
+        ownerDrones = []
         bookings = []
         owners = []
         availableRoles = []
@@ -113,12 +115,16 @@ final class AppState: ObservableObject {
 
     func refreshData() async {
         await withLoading {
-            try await loadDrones()
             if selectedRole == .owner {
+                try await loadOwnerDrones()
                 try await loadOwners()
                 try await loadBookings()
             } else if selectedRole == .farmer {
+                try await loadDrones()
                 try await loadBookings()
+            } else {
+                drones = []
+                ownerDrones = []
             }
         }
     }
@@ -132,6 +138,11 @@ final class AppState: ObservableObject {
     func loadOwners() async throws {
         guard let token else { return }
         owners = try await ownerService.fetchOwners(token: token)
+    }
+
+    func loadOwnerDrones() async throws {
+        guard let token else { return }
+        ownerDrones = try await droneService.fetchOwnerDrones(token: token)
     }
 
     func loadBookings(status: String? = nil) async throws {
@@ -156,7 +167,7 @@ final class AppState: ObservableObject {
         price: Double,
         lat: Double,
         lon: Double,
-        imageUrl: String? = nil,
+        imageUrls: [String]? = nil,
         batteryMah: Double? = nil,
         capacityLiters: Double? = nil
     ) async throws -> Drone {
@@ -168,12 +179,13 @@ final class AppState: ObservableObject {
             lat: lat,
             lon: lon,
             pricePerHour: price,
-            imageUrl: imageUrl,
+            imageUrl: imageUrls?.first,
+            imageUrls: imageUrls,
             batteryMah: batteryMah,
             capacityLiters: capacityLiters
         )
         let drone = try await droneService.createDrone(token: token, payload: payload)
-        try await loadDrones()
+        try await loadOwnerDrones()
         return drone
     }
 
@@ -181,7 +193,7 @@ final class AppState: ObservableObject {
         guard let token else { throw APIError.missingToken }
         guard selectedRole == .owner else { throw APIError.httpError(403, nil) }
         try await droneService.updateAvailability(token: token, droneId: drone.id, status: status)
-        try await loadDrones()
+        try await loadOwnerDrones()
     }
 
     func updateBookingStatus(_ booking: Booking, status: String) async throws {

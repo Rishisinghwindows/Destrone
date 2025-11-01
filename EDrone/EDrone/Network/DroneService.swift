@@ -34,6 +34,7 @@ struct DroneService {
         let lon: Double
         let pricePerHour: Double
         let imageUrl: String?
+        let imageUrls: [String]?
         let batteryMah: Double?
         let capacityLiters: Double?
 
@@ -44,6 +45,7 @@ struct DroneService {
             case lon
             case pricePerHour = "price_per_hr"
             case imageUrl = "image_url"
+            case imageUrls = "image_urls"
             case batteryMah = "battery_mah"
             case capacityLiters = "capacity_liters"
         }
@@ -55,6 +57,14 @@ struct DroneService {
 
     func fetchDrones(filter: DroneFilter = DroneFilter()) async throws -> [Drone] {
         try await client.send("GET", path: "/drones/", queryItems: filter.queryItems)
+    }
+
+    func fetchOwnerDrones(token: String) async throws -> [Drone] {
+        try await client.send(
+            "GET",
+            path: "/owners/me/drones",
+            token: token
+        )
     }
 
     func createDrone(token: String, payload: CreatePayload) async throws -> Drone {

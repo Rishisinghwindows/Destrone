@@ -13,9 +13,16 @@ class Settings(BaseModel):
         "DB_PATH",
         str((Path(__file__).resolve().parent.parent / ".." / "drones_demo.sqlite").resolve()),
     )
+    static_root: str = os.environ.get(
+        "STATIC_ROOT",
+        str((Path(__file__).resolve().parent.parent / "static").resolve()),
+    )
+    upload_dir: str = os.environ.get(
+        "UPLOAD_DIR",
+        str((Path(__file__).resolve().parent.parent / "static" / "uploads").resolve()),
+    )
 
 
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
-

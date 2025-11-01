@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
@@ -57,6 +57,7 @@ class DroneBase(BaseModel):
 class DroneCreate(DroneBase):
     price_per_hr: float = Field(gt=0)
     image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
     battery_mah: Optional[float] = None
     capacity_liters: Optional[float] = None
 
@@ -67,6 +68,7 @@ class DroneOut(DroneBase):
     price_per_hr: float
     owner_id: int
     image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
     battery_mah: Optional[float] = None
     capacity_liters: Optional[float] = None
 
@@ -93,3 +95,13 @@ class AvailabilityUpdate(BaseModel):
 
 class BookingStatusUpdate(BaseModel):
     status: str
+
+
+class AssetUploadRequest(BaseModel):
+    data: str
+    filename: Optional[str] = None
+    extension: Optional[str] = None
+
+
+class AssetUploadResponse(BaseModel):
+    url: str

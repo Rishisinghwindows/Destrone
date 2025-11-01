@@ -9,7 +9,7 @@ struct AuthFlowView: View {
     @State private var mobile: String = TokenManager.shared.mobile ?? ""
     @State private var name: String = ""
     @State private var otp: String = ""
-    @State private var signupRole: UserRole = .farmer
+    @State private var signupRole: UserRole = TokenManager.shared.onboardingPreferredRole ?? .farmer
     @State private var step: Step = .enterMobile
     @State private var isProcessing = false
     @State private var infoMessage: String?
@@ -55,6 +55,9 @@ struct AuthFlowView: View {
         .onAppear {
             LocationManager.shared.requestAccess()
         }
+        .onChange(of: signupRole) { newValue in
+            TokenManager.shared.onboardingPreferredRole = newValue
+        }
         .alert("Error", isPresented: Binding(
             get: { appState.errorMessage != nil },
             set: { if !$0 { appState.errorMessage = nil } }
@@ -85,16 +88,34 @@ struct AuthFlowView: View {
             }
 
             VStack(spacing: 6) {
-                Text("Welcome Back, Farmer!")
+                Text(welcomeTitle)
                     .font(AppTheme.font(32, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .multilineTextAlignment(.center)
-                Text("Log in to manage your farm drones.")
+                Text(welcomeSubtitle)
                     .font(AppTheme.font(14, weight: .medium))
                     .foregroundStyle(AppTheme.subtle)
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var welcomeTitle: String {
+        switch signupRole {
+        case .farmer:
+            return "Welcome, Farmer!"
+        case .owner:
+            return "Welcome, Drone Owner!"
+        }
+    }
+
+    private var welcomeSubtitle: String {
+        switch signupRole {
+        case .farmer:
+            return "Log in to manage your farm drones."
+        case .owner:
+            return "Log in to manage your drone fleet."
+        }
     }
 
     private var mobileInput: some View {
@@ -299,6 +320,7 @@ struct AuthFlowView: View {
                     roles: auth.roles.compactMap(UserRole.init(rawValue:)),
                     profileName: auth.profileName ?? sanitizedName
                 )
+                TokenManager.shared.onboardingPreferredRole = signupRole
                 if let serverName = auth.profileName {
                     name = serverName
                 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections import defaultdict
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -33,7 +34,9 @@ def list_drones(
     rows = db.execute(
         "SELECT id,name,type,lat,lon,status,price_per_hr,image_url,battery_mah,capacity_liters,owner_id FROM drones"
     ).fetchall()
-    drones = [DroneOut(**dict(row)) for row in rows]
+    id_list = [row["id"] for row in rows]
+    image_map = _fetch_drone_images(db, id_list)
+    drones = [DroneOut(**dict(row), image_urls=image_map.get(row["id"])) for row in rows]
 
     if min_price is not None:
         drones = [d for d in drones if d.price_per_hr >= min_price]
@@ -62,7 +65,8 @@ def get_drone(drone_id: int, db: sqlite3.Connection = Depends(get_db)) -> DroneO
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Drone not found")
-    return DroneOut(**dict(row))
+    image_map = _fetch_drone_images(db, [row["id"]])
+    return DroneOut(**dict(row), image_urls=image_map.get(row["id"]))
 
 
 @router.post("/", response_model=DroneOut)
@@ -75,6 +79,8 @@ def create_drone(
     if not owner:
         raise HTTPException(status_code=404, detail="Owner not found")
 
+    primary_image = payload.image_url or (payload.image_urls[0] if payload.image_urls else None) or _default_image(db)
+
     db.execute(
         "INSERT INTO drones(name,type,lat,lon,price_per_hr,image_url,battery_mah,capacity_liters,owner_id) VALUES(?,?,?,?,?,?,?,?,?)",
         (
@@ -83,7 +89,7 @@ def create_drone(
             float(payload.lat),
             float(payload.lon),
             float(payload.price_per_hr),
-            payload.image_url or _default_image(db),
+            primary_image,
             payload.battery_mah,
             payload.capacity_liters,
             int(owner["id"]),
@@ -91,11 +97,17 @@ def create_drone(
     )
     db.commit()
     new_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    if payload.image_urls:
+        _insert_drone_images(db, new_id, payload.image_urls)
+        db.commit()
+
     row = db.execute(
         "SELECT id,name,type,lat,lon,status,price_per_hr,image_url,battery_mah,capacity_liters,owner_id FROM drones WHERE id=?",
         (new_id,),
     ).fetchone()
-    return DroneOut(**dict(row))
+    image_map = _fetch_drone_images(db, [new_id])
+    return DroneOut(**dict(row), image_urls=image_map.get(new_id))
 
 
 @router.patch("/{drone_id}/availability")
@@ -123,3 +135,23 @@ def update_availability(
 def _default_image(db: sqlite3.Connection) -> str:
     count = db.execute("SELECT COUNT(*) FROM drones").fetchone()[0]
     return DRONE_IMAGE_POOL[count % len(DRONE_IMAGE_POOL)]
+
+
+def _fetch_drone_images(db: sqlite3.Connection, drone_ids: List[int]) -> dict[int, List[str]]:
+    if not drone_ids:
+        return {}
+    placeholders = ",".join("?" for _ in drone_ids)
+    rows = db.execute(
+        f"SELECT drone_id,url FROM drone_images WHERE drone_id IN ({placeholders}) ORDER BY id",
+        tuple(drone_ids),
+    ).fetchall()
+    mapping: dict[int, List[str]] = defaultdict(list)
+    for row in rows:
+        mapping[row["drone_id"]].append(row["url"])
+    return dict(mapping)
+
+
+def _insert_drone_images(db: sqlite3.Connection, drone_id: int, urls: List[str]) -> None:
+    trimmed = [url for url in urls if url]
+    for url in trimmed[:3]:
+        db.execute("INSERT INTO drone_images(drone_id,url) VALUES(?,?)", (drone_id, url))

@@ -48,6 +48,16 @@ def init_db() -> None:
         )
         cur.execute(
             """
+            CREATE TABLE IF NOT EXISTS drone_images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                drone_id INTEGER NOT NULL,
+                url TEXT NOT NULL,
+                FOREIGN KEY(drone_id) REFERENCES drones(id) ON DELETE CASCADE
+            );
+            """
+        )
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS bookings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 drone_id INTEGER NOT NULL,
@@ -98,6 +108,7 @@ def seed_demo_data() -> None:
         cur.execute("DELETE FROM drones")
         cur.execute("DELETE FROM owners")
         cur.execute("DELETE FROM farmers")
+        cur.execute("DELETE FROM drone_images")
         cur.execute("DELETE FROM sqlite_sequence WHERE name IN ('bookings','drones','owners','farmers')")
 
         for owner in _demo_owners():
@@ -121,6 +132,14 @@ def seed_demo_data() -> None:
                 ),
                 drone,
             )
+
+        image_map = _demo_drone_images()
+        for drone_id, urls in image_map.items():
+            for url in urls:
+                cur.execute(
+                    "INSERT INTO drone_images(drone_id,url) VALUES(?,?)",
+                    (drone_id, url),
+                )
 
         for booking in demo_bookings:
             cur.execute(
@@ -150,6 +169,7 @@ def truncate_tables() -> None:
         cur.execute("DELETE FROM drones")
         cur.execute("DELETE FROM owners")
         cur.execute("DELETE FROM farmers")
+        cur.execute("DELETE FROM drone_images")
 
 
 def _demo_owners() -> Sequence[tuple[int, str, str, float, float]]:
@@ -200,6 +220,23 @@ def _demo_farmers() -> Sequence[tuple[int, str, str, float, float]]:
         (19, "Anita Singh", "7100000018", 25.636, 85.186),
         (20, "Vikram Yadav", "7100000019", 25.638, 85.188),
     )
+
+
+def _demo_drone_images() -> dict[int, Sequence[str]]:
+    return {
+        1: (
+            "https://lh3.googleusercontent.com/aida-public/AB6AXuD0MWgQtqnAgKkm_5jBPHLP37mwEU9kQO720qUGCJDDW6HRdztR7hBNUuVTRfH0DpxvmpFd6tI-IY7gbyJtTeDaVJRVa6VWgU1CDXUqVYObqUHf1W5PvGEc4D1CV2U8p-yf-KQmbBW2I1DUtGSS3aDR3sIcu0Kbtxwg-00Jz8J0Wm0sWT8y6He6SofHTFLFSbJUFQtLUN69tN_BulueC8U_EdGXuXlxOd8ho4VgzRLwfNaDT1iGycXieClzyJtC6YPxTwZHtjdABdrb",
+            "https://lh3.googleusercontent.com/aida-public/AB6AXuDo-curMuAYzHtCeeSOhMZJdymO-qeFD4G85Lscyjbezr6g8-G4_n1C4MP5lEqIFuNPTX0akiIfmbkbQGQI2X8VsB9ReXNdxtbaN-uhB8hv_WJ2RfctWKV_jzVWvSiFjifF2ce2pwcMJl9NHhJ2s28B5l0FTMAar6j5xBC3f7YteUZTjvMnIsm1CWSik0cbUcIxHYNeeEZkTcxD3D4MOadiFCsgxLmPZ9uvqz_rXTZq16zXEPh40dt-b6n2WDB4pP6gpq6-VdqxrudL",
+            "https://lh3.googleusercontent.com/aida-public/AB6AXuBaW9C1wqw_l-QZYF-VWYgAu-oHG0N6wa-Tj56DkYgekx0g9uIKxkRj4EeEm_C6PBIt7L1w8049OhiaEmD-6Cc64zq6kIClJ1wTaUufFg-uQZeeL7PvdOrMJorQsrjtcIADq4YlPiXNl0TTvW0DNcAP7wPAaqBTX85aWD5dNYzJwgQFpk-ioYCg3eMVJpADOy-e7luAPaKfCrgJ4FM3AuIreJlUeNrnoaO9ZSLoGGfP3OOGsC-rjBdOQwVg6vlM0KdxDfUl0PBA2rHJ",
+        ),
+        2: (
+            "https://lh3.googleusercontent.com/aida-public/AB6AXuDo-curMuAYzHtCeeSOhMZJdymO-qeFD4G85Lscyjbezr6g8-G4_n1C4MP5lEqIFuNPTX0akiIfmbkbQGQI2X8VsB9ReXNdxtbaN-uhB8hv_WJ2RfctWKV_jzVWvSiFjifF2ce2pwcMJl9NHhJ2s28B5l0FTMAar6j5xBC3f7YteUZTjvMnIsm1CWSik0cbUcIxHYNeeEZkTcxD3D4MOadiFCsgxLmPZ9uvqz_rXTZq16zXEPh40dt-b6n2WDB4pP6gpq6-VdqxrudL",
+            "https://lh3.googleusercontent.com/aida-public/AB6AXuD0MWgQtqnAgKkm_5jBPHLP37mwEU9kQO720qUGCJDDW6HRdztR7hBNUuVTRfH0DpxvmpFd6tI-IY7gbyJtTeDaVJRVa6VWgU1CDXUqVYObqUHf1W5PvGEc4D1CV2U8p-yf-KQmbBW2I1DUtGSS3aDR3sIcu0Kbtxwg-00Jz8J0Wm0sWT8y6He6SofHTFLFSbJUFQtLUN69tN_BulueC8U_EdGXuXlxOd8ho4VgzRLwfNaDT1iGycXieClzyJtC6YPxTwZHtjdABdrb",
+        ),
+        3: (
+            "https://lh3.googleusercontent.com/aida-public/AB6AXuBaW9C1wqw_l-QZYF-VWYgAu-oHG0N6wa-Tj56DkYgekx0g9uIKxkRj4EeEm_C6PBIt7L1w8049OhiaEmD-6Cc64zq6kIClJ1wTaUufFg-uQZeeL7PvdOrMJorQsrjtcIADq4YlPiXNl0TTvW0DNcAP7wPAaqBTX85aWD5dNYzJwgQFpk-ioYCg3eMVJpADOy-e7luAPaKfCrgJ4FM3AuIreJlUeNrnoaO9ZSLoGGfP3OOGsC-rjBdOQwVg6vlM0KdxDfUl0PBA2rHJ",
+        ),
+    }
 
 
 def _demo_drones() -> Sequence[tuple[int, str, str, float, float, str, float, str, float | None, float | None, int]]:

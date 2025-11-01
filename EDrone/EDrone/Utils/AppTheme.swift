@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum AppTheme {
     static let background = Color(red: 0.05, green: 0.16, blue: 0.09)
@@ -14,9 +15,15 @@ enum AppTheme {
     static let success = Color(red: 0.22, green: 0.78, blue: 0.36)
     static let warning = Color.orange
     static let cornerRadius: CGFloat = 10
-    static let fontName = "Nunito Sans"
+    private static let primaryFontCandidates = [
+        "SpaceGrotesk-Regular",
+        "SpaceGrotesk"
+    ]
 
     static func font(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        Font.custom(fontName, size: size).weight(weight)
+        if let name = primaryFontCandidates.first(where: { UIFont(name: $0, size: size) != nil }) {
+            return Font.custom(name, size: size).weight(weight)
+        }
+        return Font.system(size: size, weight: weight, design: .rounded)
     }
 }
