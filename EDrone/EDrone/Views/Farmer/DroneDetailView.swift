@@ -53,8 +53,14 @@ struct DroneDetailView: View {
                 image
                     .resizable()
                     .scaledToFill()
+            case .failure:
+                fallbackImage
             default:
-                LinearGradient(colors: [AppTheme.accent, AppTheme.accentMuted], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(
+                    colors: [AppTheme.accent, AppTheme.accentMuted],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             }
         }
         .frame(height: 220)
@@ -189,10 +195,34 @@ struct DroneDetailView: View {
     }
 
 private var imageURL: URL? {
-    if let urlString = drone.primaryImageURL, let url = URL(string: urlString) {
-        return url
+    guard let urlString = drone.primaryImageURL else { return nil }
+    return URL(string: urlString)
+}
+
+@ViewBuilder
+private var fallbackImage: some View {
+    if let fallbackURL = URL(string: drone.fallbackImageURL()) {
+        AsyncImage(url: fallbackURL) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            default:
+                LinearGradient(
+                    colors: [AppTheme.accent, AppTheme.accentMuted],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        }
+    } else {
+        LinearGradient(
+            colors: [AppTheme.accent, AppTheme.accentMuted],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
-    return URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuDw3EbDprqmgL5vEuv4kwV7bhY5RFilj_p4P9AERyMOGxEO9ITL2XwDoRxkOCeZU50jnu7xne0FiHdLTlZIJB2dSTbp5_gBfA9WhmdLVWHyzFhQPe9Jo7PD0vv6-dCgt1g3YnnLe_4opFr9BIXJD-p-r7l65ouwI6eKBN_tab8Q4oytcXmTfJKtZPo96ZyZBBKPv-Yl8VUVDIdXXHOjtU-0zaOCLGIftg3o6XJFk_BsV4qxQ2s1a4dLiDN_VwiqtFc-ZlezlDK97q2r")
 }
 }
 

@@ -8,16 +8,19 @@ struct FarmerDashboardView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var locationManager = LocationManager.shared
 
-    @State private var minPrice: String = ""
-    @State private var maxPrice: String = ""
-    @State private var maxDistance: String = ""
-    @State private var sortBy: String = "distance"
+    @State private var filterOptions = FarmerFilterOptions()
     @State private var selectedDrone: Drone?
-    @State private var showAdvancedFilters = false
     @State private var quickFilter: QuickFilter = .all
     @State private var startDate: Date = Calendar.current.startOfDay(for: Date())
     @State private var endDate: Date = Calendar.current.date(byAdding: .day, value: 5, to: Date()) ?? Date()
-    @State private var showDateSheet = false
+    @State private var activePanel: ActivePanel?
+
+    private enum ActivePanel: String, Identifiable {
+        case filters
+        case dates
+
+        var id: String { rawValue }
+    }
 
     private enum QuickFilter: String, CaseIterable, Identifiable {
         case all = "All"
@@ -37,22 +40,27 @@ struct FarmerDashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 AppTheme.background
                     .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        welcomeHeader
-                        dateSelector
-                        quickFilterRow
-                        advancedFiltersPanel
+                VStack(spacing: 0) {
+                    headerSection
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 16)
+                        .background(AppTheme.background)
+
+                    Divider()
+                        .overlay(AppTheme.stroke)
+
+                    ScrollView {
                         droneList
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 32)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 32)
+                    .scrollIndicators(.hidden)
                 }
-                .scrollIndicators(.hidden)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
@@ -63,32 +71,52 @@ struct FarmerDashboardView: View {
                 DroneDetailView(drone: drone)
                     .environmentObject(appState)
             }
-            .sheet(isPresented: $showDateSheet) {
-                NavigationStack {
-                    Form {
-                        Section("Booking window") {
-                            DatePicker(
-                                "Start",
-                                selection: $startDate,
-                                displayedComponents: .date
-                            )
-                            DatePicker(
-                                "End",
-                                selection: $endDate,
-                                in: startDate...,
-                                displayedComponents: .date
-                            )
+            .sheet(item: $activePanel) { panel in
+                switch panel {
+                case .filters:
+                    FarmerFilterSheet(
+                        options: $filterOptions,
+                        startDate: $startDate,
+                        endDate: $endDate,
+                        onApply: {
+                            quickFilter = .all
+                            activePanel = nil
+                            Task { await refreshDrones() }
+                        },
+                        onClear: {
+                            filterOptions = .default
+                            quickFilter = .all
+                            activePanel = nil
+                            Task { await refreshDrones() }
                         }
-                    }
-                    .navigationTitle("Select Dates")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") { showDateSheet = false }
+                    )
+                case .dates:
+                    NavigationStack {
+                        Form {
+                            Section("Booking window") {
+                                DatePicker(
+                                    "Start",
+                                    selection: $startDate,
+                                    displayedComponents: .date
+                                )
+                                DatePicker(
+                                    "End",
+                                    selection: $endDate,
+                                    in: startDate...,
+                                    displayedComponents: .date
+                                )
+                            }
                         }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") {
-                                normalizeDateRange()
-                                showDateSheet = false
+                        .navigationTitle("Select Dates")
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Cancel") { activePanel = nil }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") {
+                                    normalizeDateRange()
+                                    activePanel = nil
+                                }
                             }
                         }
                     }
@@ -101,9 +129,19 @@ struct FarmerDashboardView: View {
                 normalizeDateRange()
             }
             .onReceive(locationManager.$lastLocation.compactMap { $0 }) { _ in
-                if sortBy == "distance" {
+                if filterOptions.sort == .distance {
                     Task { await refreshDrones() }
                 }
+            }
+        }
+    }
+
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            welcomeHeader
+            VStack(alignment: .leading, spacing: 10) {
+                dateSelector
+                quickFilterRow
             }
         }
     }
@@ -129,9 +167,9 @@ struct FarmerDashboardView: View {
                 }
             }
 
-            Spacer()
+                Spacer()
 
-            NavigationLink {
+                NavigationLink {
                 BookingsView()
             } label: {
                 ZStack(alignment: .topTrailing) {
@@ -161,7 +199,7 @@ struct FarmerDashboardView: View {
 
     private var dateSelector: some View {
         Button {
-            showDateSheet = true
+            activePanel = .dates
         } label: {
             HStack {
                 Image(systemName: "calendar")
@@ -181,7 +219,7 @@ struct FarmerDashboardView: View {
 
     private var quickFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            LazyHStack(spacing: 12) {
                 ForEach(QuickFilter.allCases) { filter in
                     Button {
                         applyQuickFilter(filter)
@@ -192,11 +230,11 @@ struct FarmerDashboardView: View {
                                 .fontWeight(.semibold)
                         }
                         .font(.footnote)
+                        .frame(height: 44)
                         .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
                         .background(filter == quickFilter
-                                   ? AppTheme.accent
-                                   : AppTheme.surface)
+                                    ? AppTheme.accent
+                                    : AppTheme.surface)
                         .foregroundStyle(filter == quickFilter ? .black : .white)
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
                         .overlay(
@@ -208,9 +246,7 @@ struct FarmerDashboardView: View {
                 }
 
                 Button {
-                    withAnimation(.spring()) {
-                        showAdvancedFilters.toggle()
-                    }
+                    activePanel = .filters
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                         .font(.footnote.weight(.semibold))
@@ -218,64 +254,22 @@ struct FarmerDashboardView: View {
                         .background(AppTheme.surface)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                                .stroke(AppTheme.stroke)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
                 }
+                .buttonStyle(.plain)
             }
         }
-    }
-
-    private var advancedFiltersPanel: some View {
-        Group {
-            if showAdvancedFilters {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Fine tune results")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-
-                    HStack(spacing: 12) {
-                        filterField(title: "Min price", value: $minPrice)
-                        filterField(title: "Max price", value: $maxPrice)
-                    }
-
-                    filterField(title: "Max distance (km)", value: $maxDistance)
-
-                    Picker("Sort by", selection: $sortBy) {
-                        Text("Distance").tag("distance")
-                        Text("Price").tag("price")
-                    }
-                    .pickerStyle(.segmented)
-
-                    HStack(spacing: 14) {
-                        Button("Apply", action: applyFilters)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(AppTheme.accent)
-                            .foregroundStyle(.black)
-                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-
-                        Button("Reset") {
-                            resetFilters()
-                            Task { await refreshDrones() }
-                        }
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.08))
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-                    }
-                }
-                .padding(20)
-                .background(AppTheme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
+        .frame(height: 44)
     }
 
     private var droneList: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if appState.drones.isEmpty {
+            let drones = displayedDrones
+            if drones.isEmpty {
                 if appState.isLoading {
                     ProgressView("Fetching drones...")
                         .tint(AppTheme.accent)
@@ -285,20 +279,20 @@ struct FarmerDashboardView: View {
                         Image(systemName: "airplane.circle")
                             .font(.system(size: 48))
                             .foregroundStyle(AppTheme.subtle)
-                        Text("No drones yet")
-                            .font(.headline)
+                        Text("No drones match your filters")
+                            .font(AppTheme.font(18, weight: .semibold))
                             .foregroundStyle(.white)
-                        Text("Pull to refresh or adjust filters to explore available drones.")
-                            .font(.subheadline)
+                        Text("Try broadening the distance or price range to discover more fleets nearby.")
+                            .font(AppTheme.font(14))
                             .multilineTextAlignment(.center)
                             .foregroundStyle(AppTheme.subtle)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 48)
+                    .padding(.top, 0)
                 }
             } else {
                 LazyVStack(spacing: 20) {
-                    ForEach(appState.drones) { drone in
+                    ForEach(drones) { drone in
                         Button {
                             selectedDrone = drone
                         } label: {
@@ -306,34 +300,22 @@ struct FarmerDashboardView: View {
                                 drone: drone,
                                 userCoordinate: locationManager.resolvedLocation?.coordinate
                             )
-                        }
-                        .buttonStyle(.plain)
-                    }
                 }
+                .buttonStyle(.plain)
             }
         }
     }
-
-    private func filterField(title: String, value: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(AppTheme.subtle)
-            TextField(title, text: value)
-                .keyboardType(.decimalPad)
-                .padding(12)
-                .background(Color.white.opacity(0.08))
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
         }
     }
 
+    @MainActor
     private func initialLoad() async {
         await refreshDrones()
         await loadBookingsForBadge()
         LocationManager.shared.requestAccess()
     }
 
+    @MainActor
     private func refreshDrones() async {
         do {
             let filter = buildFilter()
@@ -344,34 +326,21 @@ struct FarmerDashboardView: View {
         }
     }
 
-    private func applyFilters() {
-        Task { await refreshDrones() }
-    }
-
     private func applyQuickFilter(_ filter: QuickFilter) {
         quickFilter = filter
+        var updated = FarmerFilterOptions.default
         switch filter {
         case .all:
-            resetFilters()
+            break
         case .nearby:
-            minPrice = ""
-            maxPrice = ""
-            maxDistance = "15"
-            sortBy = "distance"
+            updated.sort = .distance
+            updated.maxDistance = 15
         case .budget:
-            minPrice = ""
-            maxPrice = "600"
-            maxDistance = ""
-            sortBy = "price"
+            updated.sort = .priceLowHigh
+            updated.maxPrice = 600
         }
+        filterOptions = updated
         Task { await refreshDrones() }
-    }
-
-    private func resetFilters() {
-        minPrice = ""
-        maxPrice = ""
-        maxDistance = ""
-        sortBy = "distance"
     }
 
     private func buildFilter() -> DroneFilter {
@@ -382,10 +351,12 @@ struct FarmerDashboardView: View {
             filter.lat = lat
             filter.lon = lon
         }
-        if let min = Double(minPrice) { filter.minPrice = min }
-        if let max = Double(maxPrice) { filter.maxPrice = max }
-        if let distance = Double(maxDistance) { filter.maxDistance = distance }
-        filter.sortBy = sortBy
+        if let min = filterOptions.minPrice { filter.minPrice = min }
+        if let max = filterOptions.maxPrice { filter.maxPrice = max }
+        if filterOptions.maxDistance < FarmerFilterOptions.Constants.maxDistance {
+            filter.maxDistance = filterOptions.maxDistance
+        }
+        filter.sortBy = filterOptions.sort.apiKey
         return filter
     }
 
@@ -419,6 +390,48 @@ struct FarmerDashboardView: View {
         return "\(startText) - \(endText)"
     }
 
+    private var displayedDrones: [Drone] {
+        var drones = appState.drones
+
+        if filterOptions.availability != .any {
+            drones = drones.filter { filterOptions.availability.matches($0.status) }
+        }
+
+        if !filterOptions.selectedCategories.isEmpty {
+            let allowed = Set(filterOptions.selectedCategories.map { $0.rawValue.lowercased() })
+            drones = drones.filter { allowed.contains($0.type.lowercased()) }
+        }
+
+        if let min = filterOptions.minPrice {
+            drones = drones.filter { $0.pricePerHour >= min }
+        }
+        if let max = filterOptions.maxPrice {
+            drones = drones.filter { $0.pricePerHour <= max }
+        }
+
+        if filterOptions.maxDistance < FarmerFilterOptions.Constants.maxDistance,
+           let coordinate = locationManager.resolvedLocation?.coordinate {
+            drones = drones.filter {
+                distance(from: coordinate, to: $0) <= filterOptions.maxDistance * 1000
+            }
+        }
+
+        switch filterOptions.sort {
+        case .priceLowHigh:
+            drones = drones.sorted { $0.pricePerHour < $1.pricePerHour }
+        case .priceHighLow:
+            drones = drones.sorted { $0.pricePerHour > $1.pricePerHour }
+        case .distance:
+            if let coordinate = locationManager.resolvedLocation?.coordinate {
+                drones = drones.sorted {
+                    distance(from: coordinate, to: $0) < distance(from: coordinate, to: $1)
+                }
+            }
+        }
+
+        return drones
+    }
+
     private var pendingBookingsCount: Int {
         appState.bookings.filter { $0.status.lowercased() == "pending" }.count
     }
@@ -435,6 +448,12 @@ struct FarmerDashboardView: View {
         } catch {
             // Ignore badge errors; surface elsewhere if needed
         }
+    }
+
+    private func distance(from coordinate: CLLocationCoordinate2D, to drone: Drone) -> Double {
+        let userLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let droneLocation = CLLocation(latitude: drone.lat, longitude: drone.lon)
+        return userLocation.distance(from: droneLocation)
     }
 }
 
@@ -461,7 +480,7 @@ private struct DroneCardView: View {
                         .resizable()
                         .scaledToFill()
                 case .failure:
-                    placeholderGradient
+                    fallbackImage
                 case .empty:
                     placeholderGradient
                 @unknown default:
@@ -555,10 +574,8 @@ private struct DroneCardView: View {
     }
 
     private var imageURL: URL? {
-        if let urlString = drone.primaryImageURL, let url = URL(string: urlString) {
-            return url
-        }
-        return URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuDw3EbDprqmgL5vEuv4kwV7bhY5RFilj_p4P9AERyMOGxEO9ITL2XwDoRxkOCeZU50jnu7xne0FiHdLTlZIJB2dSTbp5_gBfA9WhmdLVWHyzFhQPe9Jo7PD0vv6-dCgt1g3YnnLe_4opFr9BIXJD-p-r7l65ouwI6eKBN_tab8Q4oytcXmTfJKtZPo96ZyZBBKPv-Yl8VUVDIdXXHOjtU-0zaOCLGIftg3o6XJFk_BsV4qxQ2s1a4dLiDN_VwiqtFc-ZlezlDK97q2r")
+        guard let urlString = drone.primaryImageURL else { return nil }
+        return URL(string: urlString)
     }
 
     private var priceLabel: String {
@@ -633,6 +650,24 @@ private struct DroneCardView: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    @ViewBuilder
+    private var fallbackImage: some View {
+        if let fallbackURL = URL(string: drone.fallbackImageURL()) {
+            AsyncImage(url: fallbackURL, transaction: Transaction(animation: .easeInOut)) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                default:
+                    placeholderGradient
+                }
+            }
+        } else {
+            placeholderGradient
+        }
     }
 
     private func specLabel(icon: String, value: String) -> some View {
