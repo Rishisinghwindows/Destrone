@@ -12,6 +12,7 @@ The project is intentionally dependency-light so it can run on macOS without ext
 - `api/` – FastAPI backend (`main.py` entry point plus the `app/` package for config, DB, routers, and self-tests).
 - `scripts/` – Helper utilities (`create_venv.sh`, `integration_demo.py`, `run_checks.sh`).
 - `EDrone/` – Xcode workspace for the SwiftUI client app (models, networking, and views).
+- `android/` – Jetpack Compose Android client mirroring the SwiftUI flows (OTP auth, drones, bookings).
 - `drones_demo.sqlite` – Generated SQLite database (safe to delete when reseeding state).
 
 ## Backend Setup & Usage
@@ -53,6 +54,7 @@ Core flows:
 - `python api/main.py --selftest` – Smoke tests (JWT, DB schema, seed data).
 - `scripts/integration_demo.py` – End-to-end API exercise from OTP to booking.
 - `scripts/run_checks.sh` – Runs self-test + integration flow inside the virtual env.
+- Android app uses the same backend fixtures; open `android/` in Android Studio and update `BuildConfig.BASE_URL` if you are not targeting localhost.
 
 For Swift, use Xcode’s build/run and previews. The app relies on the live backend, so keep the Python server running during UI testing.
 
